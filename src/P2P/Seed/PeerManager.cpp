@@ -302,7 +302,7 @@ std::vector<PeerPtr> PeerManager::GetPeersWithCapability(
 				}
 			}
 		}
-
+		
 		iter++;
 	}
 
