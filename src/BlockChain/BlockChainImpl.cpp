@@ -7,9 +7,11 @@
 #include "Processors/TxHashSetProcessor.h"
 #include "Processors/BlockProcessor.h"
 #include "ChainResyncer.h"
+#include "CoinView.h"
 
 #include <GrinVersion.h>
 #include <Common/Logger.h>
+#include <Core/Global.h>
 #include <Core/Exceptions/BadDataException.h>
 #include <Config/Config.h>
 #include <PMMR/TxHashSet.h>
@@ -69,33 +71,36 @@ std::shared_ptr<BlockChain> BlockChain::Create(
 			else
 			{
 				pTxHashSet->Compact();
+				// TODO: Prune database
 			}
 
 			pBatch->Commit();
 		}
 	}
 
-	const auto versionPath = config.GetDataDirectory() / "NODE" / "version.txt";
-	std::vector<uint8_t> versionData;
-	if (!FileUtil::ReadFile(versionPath, versionData))
-	{
+	const uint8_t db_version = pDatabase->Read()->GetVersion();
+	if (db_version < 2) {
 		LOG_WARNING_F("Updating chain for version {}", GRINPP_VERSION);
-		auto pBlockDB = pDatabase->Write();
-		pBlockDB->ClearOutputPositions();
+		pDatabase->Write()->ClearOutputPositions();
 
+		auto pBlockDB = pDatabase->Write();
 		auto pTxHashSetReader = pTxHashSetManager->Read();
-		if (pTxHashSetReader->GetTxHashSet() != nullptr)
-		{
+		if (pTxHashSetReader->GetTxHashSet() != nullptr) {
 			pTxHashSetReader->GetTxHashSet()->SaveOutputPositions(
 				pChainStore->Read()->GetCandidateChain(),
 				pBlockDB.GetShared()
 			);
 		}
-
-		pBlockDB->Commit();
-
-		FileUtil::WriteTextToFile(versionPath, GRINPP_VERSION);
+		pBlockDB->SetVersion(2);
 	}
+
+	if (db_version < 3) {
+		LOG_WARNING_F("Migrating blocks to v3 for Grin++ {}", GRINPP_VERSION);
+		pDatabase->Write()->MigrateBlocks();
+		pDatabase->Write()->SetVersion(3);
+	}
+
+	Global::SetCoinView(std::make_shared<CoinView>(*pChainState));
 
 	return std::shared_ptr<BlockChain>(new BlockChain(
 		config,

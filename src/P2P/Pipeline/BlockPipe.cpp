@@ -3,7 +3,6 @@
 #include "../ConnectionManager.h"
 
 #include <Common/Util/ThreadUtil.h>
-#include <Common/ThreadManager.h>
 #include <Common/Logger.h>
 #include <BlockChain/BlockChain.h>
 
@@ -31,7 +30,7 @@ std::shared_ptr<BlockPipe> BlockPipe::Create(const Config& config, const IBlockC
 
 void BlockPipe::Thread_ProcessNewBlocks(BlockPipe& pipeline)
 {
-	ThreadManagerAPI::SetCurrentThreadName("BLOCK_PREPROCESS_PIPE");
+	LoggerAPI::SetThreadName("BLOCK_PREPROCESS_PIPE");
 	LOG_TRACE("BEGIN");
 
 	while (!pipeline.m_terminate)
@@ -58,7 +57,7 @@ void BlockPipe::Thread_ProcessNewBlocks(BlockPipe& pipeline)
 		}
 		else
 		{
-			ThreadUtil::SleepFor(std::chrono::milliseconds(5), pipeline.m_terminate);
+			ThreadUtil::SleepFor(std::chrono::milliseconds(5));
 		}
 	}
 
@@ -84,14 +83,14 @@ void BlockPipe::ProcessNewBlock(BlockPipe& pipeline, const BlockEntry& blockEntr
 
 void BlockPipe::Thread_PostProcessBlocks(BlockPipe& pipeline)
 {
-	ThreadManagerAPI::SetCurrentThreadName("BLOCK_POSTPROCESS_PIPE");
+	LoggerAPI::SetThreadName("BLOCK_POSTPROCESS_PIPE");
 	LOG_TRACE("BEGIN");
 
 	while (!pipeline.m_terminate)
 	{
 		if (!pipeline.m_pBlockChain->ProcessNextOrphanBlock())
 		{
-			ThreadUtil::SleepFor(std::chrono::milliseconds(5), pipeline.m_terminate);
+			ThreadUtil::SleepFor(std::chrono::milliseconds(5));
 		}
 	}
 

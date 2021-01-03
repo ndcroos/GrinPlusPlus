@@ -4,8 +4,8 @@
 // Distributed under the MIT software license, see the accompanying
 // file LICENSE or http://www.opensource.org/licenses/mit-license.php.
 
-#include <Common/ImportExport.h>
 #include <BlockChain/BlockChainStatus.h>
+#include <BlockChain/ICoinView.h>
 #include <TxPool/PoolType.h>
 #include <P2P/SyncStatus.h>
 #include <Core/Models/DTOs/BlockWithOutputs.h>
@@ -29,11 +29,7 @@ class SyncStatus;
 class FullBlock;
 class CompactBlock;
 
-#ifdef MW_BLOCK_CHAIN
-#define BLOCK_CHAIN_API EXPORT
-#else
-#define BLOCK_CHAIN_API IMPORT
-#endif
+#define BLOCK_CHAIN_API
 
 //
 // This interface acts as the single entry-point into the BlockChain shared library.

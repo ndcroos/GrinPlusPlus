@@ -5,8 +5,6 @@ file(GLOB SOURCE_CODE
     "GrinStr.cpp"
     "Logger.cpp"
     "Secure.cpp"
-    "ShutdownManager.cpp"
-    "ThreadManager.cpp"
     "Util/FileUtil.cpp"
     "Util/HexUtil.cpp"
 )

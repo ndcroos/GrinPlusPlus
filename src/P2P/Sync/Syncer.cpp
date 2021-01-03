@@ -5,7 +5,6 @@
 
 #include <BlockChain/BlockChain.h>
 #include <P2P/SyncStatus.h>
-#include <Common/ThreadManager.h>
 #include <Common/Logger.h>
 #include <Common/Util/ThreadUtil.h>
 
@@ -50,7 +49,7 @@ std::shared_ptr<Syncer> Syncer::Create(
 
 void Syncer::Thread_Sync(Syncer& syncer)
 {
-	ThreadManagerAPI::SetCurrentThreadName("SYNC");
+	LoggerAPI::SetThreadName("SYNC");
 	LOG_DEBUG("BEGIN");
 
 	HeaderSyncer headerSyncer(syncer.m_pConnectionManager, syncer.m_pBlockChain);
@@ -62,7 +61,7 @@ void Syncer::Thread_Sync(Syncer& syncer)
 	{
 		try
 		{
-			ThreadUtil::SleepFor(std::chrono::milliseconds(10), syncer.m_terminate);
+			ThreadUtil::SleepFor(std::chrono::milliseconds(10));
 			syncer.UpdateSyncStatus();
 
 			if (syncer.m_pSyncStatus->GetNumActiveConnections() >= MINIMUM_NUM_PEERS)

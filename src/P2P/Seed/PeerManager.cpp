@@ -6,7 +6,6 @@
 #include <Common/Util/ThreadUtil.h>
 #include <Config/Config.h>
 #include <Common/Logger.h>
-#include <Common/ThreadManager.h>
 #include <Crypto/CSPRNG.h>
 
 PeerManager::PeerManager(const Context::Ptr& pContext, std::shared_ptr<Locked<IPeerDB>> pPeerDB)
@@ -53,7 +52,7 @@ std::shared_ptr<Locked<PeerManager>> PeerManager::Create(const Context::Ptr& pCo
 
 void PeerManager::Thread_ManagePeers(PeerManager& peerManager)
 {
-	ThreadManagerAPI::SetCurrentThreadName("PEER_MANAGER");
+	LoggerAPI::SetThreadName("PEER_MANAGER");
 	LOG_TRACE("BEGIN");
 
 	try
@@ -273,7 +272,6 @@ std::vector<PeerPtr> PeerManager::GetPeersWithCapability(
 
 	for (size_t i = 0; i < numPeers; i++)
 	{
-		iter++;
 		if (iter == m_peersByAddress.end())
 		{
 			iter = m_peersByAddress.begin();
@@ -304,6 +302,8 @@ std::vector<PeerPtr> PeerManager::GetPeersWithCapability(
 				}
 			}
 		}
+
+		iter++;
 	}
 
 	return peersFound;

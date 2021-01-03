@@ -10,7 +10,6 @@
 #include <Net/Socket.h>
 #include <Common/Util/StringUtil.h>
 #include <Common/Util/ThreadUtil.h>
-#include <Common/ThreadManager.h>
 #include <Common/Logger.h>
 #include <algorithm>
 
@@ -57,7 +56,7 @@ std::unique_ptr<Seeder> Seeder::Create(
 //
 void Seeder::Thread_Seed(Seeder& seeder)
 {
-	ThreadManagerAPI::SetCurrentThreadName("SEED");
+	LoggerAPI::SetThreadName("SEED");
 	LOG_TRACE("BEGIN");
 
 	auto lastConnectTime = std::chrono::system_clock::now() - std::chrono::seconds(10);
@@ -87,7 +86,7 @@ void Seeder::Thread_Seed(Seeder& seeder)
 			LOG_WARNING_F("Exception thrown: {}", e.what());
 		}
 
-		ThreadUtil::SleepFor(std::chrono::milliseconds(100), seeder.m_terminate);
+		ThreadUtil::SleepFor(std::chrono::milliseconds(100));
 	}
 
 	LOG_TRACE("END");
@@ -99,7 +98,7 @@ void Seeder::Thread_Seed(Seeder& seeder)
 //
 void Seeder::Thread_Listener(Seeder& seeder)
 {
-	ThreadManagerAPI::SetCurrentThreadName("LISTENER");
+	LoggerAPI::SetThreadName("LISTENER");
 	LOG_TRACE("BEGIN");
 
 	try
@@ -135,7 +134,7 @@ void Seeder::Thread_Listener(Seeder& seeder)
 				}
 				else
 				{
-					ThreadUtil::SleepFor(std::chrono::milliseconds(10), seeder.m_terminate);
+					ThreadUtil::SleepFor(std::chrono::milliseconds(10));
 				}
 			}
 

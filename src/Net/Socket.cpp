@@ -1,8 +1,8 @@
 #include <Net/Socket.h>
 #include <Net/SocketException.h>
+#include <Core/Global.h>
 #include <Common/Util/ThreadUtil.h>
 #include <Common/Logger.h>
-#include <Common/ShutdownManager.h>
 
 static unsigned long DEFAULT_TIMEOUT = 5 * 1000; // 5s
 
@@ -71,7 +71,7 @@ bool Socket::Connect(std::shared_ptr<asio::io_context> pContext)
 	auto timeout = std::chrono::system_clock::now() + std::chrono::seconds(1);
 	while (!m_errorCode && !m_socketOpen && std::chrono::system_clock::now() < timeout)
 	{
-		ThreadUtil::SleepFor(std::chrono::milliseconds(10), false);
+		ThreadUtil::SleepFor(std::chrono::milliseconds(10));
 	}
 
 	return m_socketOpen;
@@ -291,12 +291,12 @@ bool Socket::Receive(const size_t numBytes, const bool incrementCount, const ERe
 		std::chrono::time_point timeout = std::chrono::system_clock::now() + std::chrono::seconds(8);
 		while (!hasReceivedData)
 		{
-			if (std::chrono::system_clock::now() >= timeout || ShutdownManagerAPI::WasShutdownRequested())
+			if (std::chrono::system_clock::now() >= timeout || !Global::IsRunning())
 			{
 				return false;
 			}
 
-			ThreadUtil::SleepFor(std::chrono::milliseconds(5), false);
+			ThreadUtil::SleepFor(std::chrono::milliseconds(5));
 			hasReceivedData = HasReceivedData();
 		}
 	}

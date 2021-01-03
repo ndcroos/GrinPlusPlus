@@ -6,10 +6,9 @@
 
 #include <GrinVersion.h>
 #include <Core/Context.h>
+#include <Core/Global.h>
 #include <Wallet/WalletManager.h>
 #include <Config/ConfigLoader.h>
-#include <Common/ShutdownManager.h>
-#include <Common/ThreadManager.h>
 #include <Common/Logger.h>
 #include <Common/Util/ThreadUtil.h>
 
@@ -26,7 +25,7 @@ void Run(const ConfigPtr& pConfig, const Options& options);
 
 int main(int argc, char* argv[])
 {
-	ThreadManagerAPI::SetCurrentThreadName("MAIN");
+	LoggerAPI::SetThreadName("MAIN");
 
 	Options opt = ParseOptions(argc, argv);
 	if (opt.help)
@@ -83,8 +82,6 @@ ConfigPtr Initialize(const EEnvironmentType environment, const bool headless)
 		throw;
 	}
 
-	ShutdownManagerAPI::RegisterHandlers();
-
 	return pConfig;
 }
 
@@ -93,15 +90,18 @@ void Run(const ConfigPtr& pConfig, const Options& options)
 	LOG_INFO_F("Starting Grin++ v{}", GRINPP_VERSION);
 
 	Context::Ptr pContext = nullptr;
+
 	try
 	{
 		pContext = Context::Create(pConfig);
+		Global::Init(pContext);
 	}
 	catch (std::exception& e)
 	{
-		IO::Err("Failed to create context", e);
+		IO::Err("Failed to initialize global context", e);
 		throw;
 	}
+
 
 	std::unique_ptr<Node> pNode = nullptr;
 	INodeClientPtr pNodeClient = nullptr;
@@ -132,7 +132,7 @@ void Run(const ConfigPtr& pConfig, const Options& options)
 	system_clock::time_point startTime = system_clock::now();
 	while (true)
 	{
-		if (ShutdownManagerAPI::WasShutdownRequested())
+		if (!Global::IsRunning())
 		{
 			if (!options.headless)
 			{
@@ -150,7 +150,7 @@ void Run(const ConfigPtr& pConfig, const Options& options)
 			pNode->UpdateDisplay(secondsRunning);
 		}
 
-		ThreadUtil::SleepFor(seconds(1), ShutdownManagerAPI::WasShutdownRequested());
+		ThreadUtil::SleepFor(seconds(1));
 	}
 
 	LOG_INFO_F("Closing Grin++ v{}", GRINPP_VERSION);

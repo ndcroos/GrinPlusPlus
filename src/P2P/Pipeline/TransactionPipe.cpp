@@ -3,7 +3,6 @@
 #include "../ConnectionManager.h"
 
 #include <Common/Util/ThreadUtil.h>
-#include <Common/ThreadManager.h>
 #include <Common/Logger.h>
 #include <BlockChain/BlockChain.h>
 
@@ -33,7 +32,7 @@ std::shared_ptr<TransactionPipe> TransactionPipe::Create(
 
 void TransactionPipe::Thread_ProcessTransactions(TransactionPipe& pipeline)
 {
-	ThreadManagerAPI::SetCurrentThreadName("TXN_PIPE");
+	LoggerAPI::SetThreadName("TXN_PIPE");
 	LOG_TRACE("BEGIN");
 
 	while (!pipeline.m_terminate)
@@ -64,7 +63,7 @@ void TransactionPipe::Thread_ProcessTransactions(TransactionPipe& pipeline)
 			}
 			else
 			{
-				ThreadUtil::SleepFor(std::chrono::milliseconds(5), pipeline.m_terminate);
+				ThreadUtil::SleepFor(std::chrono::milliseconds(5));
 			}
 		}
 		catch (std::exception& e)

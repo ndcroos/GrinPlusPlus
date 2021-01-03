@@ -1,6 +1,6 @@
 #pragma once
 
-#include <Common/Exceptions/UnimplementedException.h>
+#include <Core/Exceptions/UnimplementedException.h>
 #include <Core/Traits/Batchable.h>
 #include <memory>
 #include <shared_mutex>
@@ -66,7 +66,7 @@ public:
 	}
 
 private:
-	Reader(std::shared_ptr<InnerReader<T>> pReader)
+	Reader(const std::shared_ptr<InnerReader<T>>& pReader)
 		: m_pReader(pReader)
 	{
 
@@ -78,7 +78,7 @@ private:
 class MutexUnlocker
 {
 public:
-	MutexUnlocker(std::shared_ptr<std::shared_mutex> pMutex)
+	MutexUnlocker(const std::shared_ptr<std::shared_mutex>& pMutex)
 		: m_pMutex(pMutex)
 	{
 
@@ -108,7 +108,7 @@ class Writer : public Reader<T>
 				m_pMutex->lock();
 			}
 
-			OnInitWrite();
+			OnInitWrite(batched);
 		}
 
 		~InnerWriter()
@@ -160,13 +160,13 @@ class Writer : public Reader<T>
 			}
 		}
 
-		void OnInitWrite()
+		void OnInitWrite(const bool batch)
 		{
 			Traits::IBatchable* pBatchable = GetBatchable(m_pObject);
 			if (pBatchable != nullptr)
 			{
 				pBatchable->SetDirty(true);
-				pBatchable->OnInitWrite();
+				pBatchable->OnInitWrite(batch);
 			}
 		}
 
