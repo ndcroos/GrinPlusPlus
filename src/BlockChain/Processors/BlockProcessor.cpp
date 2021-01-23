@@ -2,11 +2,10 @@
 #include "BlockHeaderProcessor.h"
 #include "../Validators/BlockValidator.h"
 
-#include <Consensus/Common.h>
+#include <Consensus.h>
 #include <Core/Exceptions/BlockChainException.h>
 #include <Core/Exceptions/BadDataException.h>
 #include <Core/Validation/KernelSumValidator.h>
-#include <Consensus/BlockTime.h>
 #include <Common/Logger.h>
 #include <Common/Util/HexUtil.h>
 #include <Common/Util/StringUtil.h>
@@ -231,7 +230,6 @@ void BlockProcessor::ValidateAndAddBlock(const FullBlock& block, Writer<ChainSta
 		std::make_optional(*pPreviousBlockSums)
 	);
 
-	pBlockDB->RemoveOutputPositions(block.GetInputCommitments());
 	pBlockDB->AddBlockSums(block.GetHash(), blockSums);
 	pBlockDB->AddBlock(block);
 	pOrphanPool->RemoveOrphan(block.GetHeight(), block.GetHash());

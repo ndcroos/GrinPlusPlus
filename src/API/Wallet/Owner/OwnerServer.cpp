@@ -3,22 +3,25 @@
 #include <Net/Tor/TorProcess.h>
 
 // APIs
-#include <API/Wallet/Owner/Handlers/CreateWalletHandler.h>
-#include <API/Wallet/Owner/Handlers/RestoreWalletHandler.h>
-#include <API/Wallet/Owner/Handlers/LoginHandler.h>
-#include <API/Wallet/Owner/Handlers/LogoutHandler.h>
-#include <API/Wallet/Owner/Handlers/SendHandler.h>
-#include <API/Wallet/Owner/Handlers/ReceiveHandler.h>
-#include <API/Wallet/Owner/Handlers/FinalizeHandler.h>
-#include <API/Wallet/Owner/Handlers/RetryTorHandler.h>
-#include <API/Wallet/Owner/Handlers/DeleteWalletHandler.h>
-#include <API/Wallet/Owner/Handlers/GetWalletSeedHandler.h>
-#include <API/Wallet/Owner/Handlers/CancelTxHandler.h>
-#include <API/Wallet/Owner/Handlers/GetBalanceHandler.h>
-#include <API/Wallet/Owner/Handlers/ListTxsHandler.h>
-#include <API/Wallet/Owner/Handlers/RepostTxHandler.h>
-#include <API/Wallet/Owner/Handlers/EstimateFeeHandler.h>
-#include <API/Wallet/Owner/Handlers/ScanForOutputsHandler.h>
+#include "Handlers/CreateWalletHandler.h"
+#include "Handlers/RestoreWalletHandler.h"
+#include "Handlers/LoginHandler.h"
+#include "Handlers/LogoutHandler.h"
+#include "Handlers/SendHandler.h"
+#include "Handlers/ReceiveHandler.h"
+#include "Handlers/FinalizeHandler.h"
+#include "Handlers/RetryTorHandler.h"
+#include "Handlers/DeleteWalletHandler.h"
+#include "Handlers/GetWalletSeedHandler.h"
+#include "Handlers/CancelTxHandler.h"
+#include "Handlers/GetBalanceHandler.h"
+#include "Handlers/ListTxsHandler.h"
+#include "Handlers/ListOutputsHandler.h"
+#include "Handlers/RepostTxHandler.h"
+#include "Handlers/EstimateFeeHandler.h"
+#include "Handlers/ScanForOutputsHandler.h"
+#include "Handlers/AddressInfoHandler.h"
+#include "Handlers/ListWalletsHandler.h"
 
 OwnerServer::UPtr OwnerServer::Create(const TorProcess::Ptr& pTorProcess, const IWalletManagerPtr& pWalletManager)
 {
@@ -54,7 +57,7 @@ OwnerServer::UPtr OwnerServer::Create(const TorProcess::Ptr& pTorProcess, const 
             }
         }
     */
-    pServer->AddMethod("create_wallet", std::shared_ptr<RPCMethod>((RPCMethod*)new CreateWalletHandler(pWalletManager, pTorProcess)));
+    pServer->AddMethod("create_wallet", std::shared_ptr<RPCMethod>(new CreateWalletHandler(pWalletManager, pTorProcess)));
 
     /*
         Request:
@@ -80,7 +83,7 @@ OwnerServer::UPtr OwnerServer::Create(const TorProcess::Ptr& pTorProcess, const 
             }
         }
     */
-    pServer->AddMethod("restore_wallet", std::shared_ptr<RPCMethod>((RPCMethod*)new RestoreWalletHandler(pWalletManager, pTorProcess)));
+    pServer->AddMethod("restore_wallet", std::shared_ptr<RPCMethod>(new RestoreWalletHandler(pWalletManager, pTorProcess)));
 
     /*
         Request:
@@ -105,7 +108,7 @@ OwnerServer::UPtr OwnerServer::Create(const TorProcess::Ptr& pTorProcess, const 
             }
         }
     */
-    pServer->AddMethod("login", std::shared_ptr<RPCMethod>((RPCMethod*)new LoginHandler(pWalletManager, pTorProcess)));
+    pServer->AddMethod("login", std::shared_ptr<RPCMethod>(new LoginHandler(pWalletManager, pTorProcess)));
 
     /*
         Request:
@@ -125,12 +128,12 @@ OwnerServer::UPtr OwnerServer::Create(const TorProcess::Ptr& pTorProcess, const 
             "result": {}
         }
     */
-    pServer->AddMethod("logout", std::shared_ptr<RPCMethod>((RPCMethod*)new LogoutHandler(pWalletManager)));
+    pServer->AddMethod("logout", std::shared_ptr<RPCMethod>(new LogoutHandler(pWalletManager)));
 
-    pServer->AddMethod("send", std::shared_ptr<RPCMethod>((RPCMethod*)new SendHandler(pTorProcess, pWalletManager)));
-    pServer->AddMethod("receive", std::shared_ptr<RPCMethod>((RPCMethod*)new ReceiveHandler(pWalletManager)));
-    pServer->AddMethod("finalize", std::shared_ptr<RPCMethod>((RPCMethod*)new FinalizeHandler(pTorProcess, pWalletManager)));
-    pServer->AddMethod("retry_tor", std::shared_ptr<RPCMethod>((RPCMethod*)new RetryTorHandler(pTorProcess, pWalletManager)));
+    pServer->AddMethod("send", std::shared_ptr<RPCMethod>(new SendHandler(pTorProcess, pWalletManager)));
+    pServer->AddMethod("receive", std::shared_ptr<RPCMethod>(new ReceiveHandler(pWalletManager)));
+    pServer->AddMethod("finalize", std::shared_ptr<RPCMethod>(new FinalizeHandler(pTorProcess, pWalletManager)));
+    pServer->AddMethod("retry_tor", std::shared_ptr<RPCMethod>(new RetryTorHandler(pTorProcess, pWalletManager)));
 
     /*
         Request:
@@ -153,7 +156,7 @@ OwnerServer::UPtr OwnerServer::Create(const TorProcess::Ptr& pTorProcess, const 
             }
         }
     */
-    pServer->AddMethod("delete_wallet", std::shared_ptr<RPCMethod>((RPCMethod*)new DeleteWalletHandler(pWalletManager)));
+    pServer->AddMethod("delete_wallet", std::shared_ptr<RPCMethod>(new DeleteWalletHandler(pWalletManager)));
 
     /*
         Request:
@@ -176,7 +179,7 @@ OwnerServer::UPtr OwnerServer::Create(const TorProcess::Ptr& pTorProcess, const 
             }
         }
     */
-    pServer->AddMethod("get_wallet_seed", std::shared_ptr<RPCMethod>((RPCMethod*)new GetWalletSeedHandler(pWalletManager)));
+    pServer->AddMethod("get_wallet_seed", std::shared_ptr<RPCMethod>(new GetWalletSeedHandler(pWalletManager)));
 
     /*
         Request:
@@ -199,7 +202,7 @@ OwnerServer::UPtr OwnerServer::Create(const TorProcess::Ptr& pTorProcess, const 
             }
         }
     */
-    pServer->AddMethod("cancel_tx", std::shared_ptr<RPCMethod>((RPCMethod*)new CancelTxHandler(pWalletManager)));
+    pServer->AddMethod("cancel_tx", std::shared_ptr<RPCMethod>(new CancelTxHandler(pWalletManager)));
 
     /*
         Request:
@@ -225,7 +228,7 @@ OwnerServer::UPtr OwnerServer::Create(const TorProcess::Ptr& pTorProcess, const 
             }
         }
     */
-    pServer->AddMethod("get_balance", std::shared_ptr<RPCMethod>((RPCMethod*)new GetBalanceHandler(pWalletManager)));
+    pServer->AddMethod("get_balance", std::shared_ptr<RPCMethod>(new GetBalanceHandler(pWalletManager)));
 
     /*
         Request:
@@ -250,7 +253,9 @@ OwnerServer::UPtr OwnerServer::Create(const TorProcess::Ptr& pTorProcess, const 
             }
         }
     */
-    pServer->AddMethod("list_txs", std::shared_ptr<RPCMethod>((RPCMethod*)new ListTxsHandler(pWalletManager)));
+    pServer->AddMethod("list_txs", std::shared_ptr<RPCMethod>(new ListTxsHandler(pWalletManager)));
+
+    pServer->AddMethod("list_outputs", std::shared_ptr<RPCMethod>(new ListOutputsHandler(pWalletManager)));
 
     /*
         Request:
@@ -274,7 +279,7 @@ OwnerServer::UPtr OwnerServer::Create(const TorProcess::Ptr& pTorProcess, const 
             }
         }
     */
-    pServer->AddMethod("repost_tx", std::shared_ptr<RPCMethod>((RPCMethod*)new RepostTxHandler(pTorProcess, pWalletManager)));
+    pServer->AddMethod("repost_tx", std::shared_ptr<RPCMethod>(new RepostTxHandler(pTorProcess, pWalletManager)));
 
     /*
         Request:
@@ -310,9 +315,13 @@ OwnerServer::UPtr OwnerServer::Create(const TorProcess::Ptr& pTorProcess, const 
             }
         }
     */
-    pServer->AddMethod("estimate_fee", std::shared_ptr<RPCMethod>((RPCMethod*)new EstimateFeeHandler(pWalletManager)));
+    pServer->AddMethod("estimate_fee", std::shared_ptr<RPCMethod>(new EstimateFeeHandler(pWalletManager)));
 
-    pServer->AddMethod("scan_for_outputs", std::shared_ptr<RPCMethod>((RPCMethod*)new ScanForOutputsHandler(pWalletManager)));
+    pServer->AddMethod("scan_for_outputs", std::shared_ptr<RPCMethod>(new ScanForOutputsHandler(pWalletManager)));
+
+    pServer->AddMethod("address_info", std::shared_ptr<RPCMethod>(new AddressInfoHandler()));
+
+    pServer->AddMethod("list_wallets", std::shared_ptr<RPCMethod>(new ListWalletsHandler(pWalletManager)));
 
     // TODO: Add the following APIs: 
     // authenticate - Simply validates the password - useful for confirming password before sending funds

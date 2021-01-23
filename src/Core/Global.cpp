@@ -1,17 +1,20 @@
 #include <Core/Global.h>
 #include <Core/Context.h>
-#include <Config/Config.h>
+#include <Core/Genesis.h>
+#include <Core/Config.h>
 
 #include <csignal>
 #include <cassert>
 
-// A reference to SHARED_CONTEXT is kept until Shutdown() to make sure it doesn't get cleaned up.
+// A strong reference to SHARED_CONTEXT is kept until Shutdown() to make sure it doesn't get cleaned up.
 static std::shared_ptr<Context> SHARED_CONTEXT;
 
+// A weak reference is held to the context even after Shutdown(), so use this to access the context.
 static std::weak_ptr<Context> GLOBAL_CONTEXT;
 
 static std::atomic_bool RUNNING = false;
 static std::shared_ptr<const ICoinView> COIN_VIEW;
+static TorProcess::Ptr TOR_PROCESS;
 
 static void SigIntHandler(int signum)
 {
@@ -24,6 +27,13 @@ void Global::Init(const Context::Ptr& pContext)
 	SHARED_CONTEXT = pContext;
 	GLOBAL_CONTEXT = pContext;
 	RUNNING = true;
+
+	const Config& config = pContext->GetConfig();
+	TOR_PROCESS = TorProcess::Initialize(
+		config.GetTorDataPath(),
+		config.GetSocksPort(),
+		config.GetControlPort()
+	);
 
 	signal(SIGINT, SigIntHandler);
 	signal(SIGTERM, SigIntHandler);
@@ -39,10 +49,11 @@ const std::atomic_bool& Global::IsRunning()
 void Global::Shutdown()
 {
 	RUNNING = false;
+	TOR_PROCESS.reset();
 	SHARED_CONTEXT.reset();
 }
 
-const Config& Global::GetConfig()
+Config& Global::GetConfig()
 {
 	return LockContext()->GetConfig();
 }
@@ -52,14 +63,39 @@ Context::Ptr Global::GetContext()
 	return GLOBAL_CONTEXT.lock();
 }
 
-const Environment& Global::GetEnvVars()
+TorProcess::Ptr Global::GetTorProcess()
 {
-	return LockContext()->GetConfig().GetEnvironment();
+	return TOR_PROCESS;
 }
 
-EEnvironmentType Global::GetEnv()
+Environment Global::GetEnv()
 {
-	return LockContext()->GetConfig().GetEnvironment().GetType();
+	return LockContext()->GetEnvironment();
+}
+
+const std::vector<uint8_t>& Global::GetMagicBytes()
+{
+	return LockContext()->GetConfig().GetMagicBytes();
+}
+
+const FullBlock& Global::GetGenesisBlock()
+{
+	const Environment env = GetEnv();
+	if (env == Environment::MAINNET) {
+		return Genesis::MAINNET_GENESIS;
+	} else {
+		return Genesis::FLOONET_GENESIS;
+	}
+}
+
+const std::shared_ptr<const BlockHeader>& Global::GetGenesisHeader()
+{
+	return GetGenesisBlock().GetHeader();
+}
+
+const Hash& Global::GetGenesisHash()
+{
+	return GetGenesisBlock().GetHash();
 }
 
 void Global::SetCoinView(const std::shared_ptr<const ICoinView>& pCoinView)

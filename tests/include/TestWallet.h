@@ -1,8 +1,8 @@
 #pragma once
 
+#include <Consensus.h>
 #include <Wallet/WalletManager.h>
 #include <Models/TxModels.h>
-#include <Consensus/Common.h>
 
 class TestWallet
 {
@@ -67,7 +67,7 @@ public:
     std::vector<WalletTxDTO> GetTransactions()
     {
         return m_pWalletManager->GetWallet(m_token).Read()->GetTransactions(
-            ListTxsCriteria(m_token, std::nullopt, std::nullopt, {})
+            ListTxsCriteria(m_token, {}, std::nullopt, std::nullopt, {})
         );
     }
 

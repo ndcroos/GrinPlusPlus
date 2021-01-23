@@ -2,10 +2,10 @@
 
 #include <Wallet/WalletManager.h>
 #include <Wallet/Keychain/KeyChain.h>
-#include <API/Wallet/Foreign/Handlers/ReceiveTxHandler.h>
-#include <API/Wallet/Foreign/Handlers/FinalizeTxHandler.h>
-#include <API/Wallet/Foreign/Handlers/CheckVersionHandler.h>
-#include <API/Wallet/Foreign/Handlers/BuildCoinbaseHandler.h>
+#include "Handlers/ReceiveTxHandler.h"
+#include "Handlers/FinalizeTxHandler.h"
+#include "Handlers/CheckVersionHandler.h"
+#include "Handlers/BuildCoinbaseHandler.h"
 
 ForeignServer::UPtr ForeignServer::Create(
     const KeyChain& keyChain,
@@ -255,11 +255,8 @@ std::optional<TorAddress> ForeignServer::AddTorListener(
     {
         ed25519_keypair_t torKey = keyChain.DeriveED25519Key(KeyChainPath::FromString("m/0/1/0"));
 
-        auto pTorAddress = pTorProcess->AddListener(torKey.secret_key, portNumber);
-        if (pTorAddress != nullptr)
-        {
-            return std::make_optional(*pTorAddress);
-        }
+        auto tor_address = pTorProcess->AddListener(torKey.secret_key, portNumber);
+        return std::make_optional(std::move(tor_address));
     }
     catch (std::exception& e)
     {

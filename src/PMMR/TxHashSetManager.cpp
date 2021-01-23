@@ -10,6 +10,7 @@
 #include <Common/Logger.h>
 
 #include <filesystem.h>
+#include <thread>
 
 TxHashSetManager::TxHashSetManager(const Config& config)
 	: m_config(config), m_pTxHashSet(nullptr)
@@ -17,13 +18,30 @@ TxHashSetManager::TxHashSetManager(const Config& config)
 
 }
 
-std::shared_ptr<ITxHashSet> TxHashSetManager::Open(BlockHeaderPtr pConfirmedTip, const FullBlock& genesisBlock)
+std::shared_ptr<ITxHashSet> TxHashSetManager::Open(const BlockHeaderPtr& pConfirmedTip)
 {
 	Close();
 
-	std::shared_ptr<KernelMMR> pKernelMMR = KernelMMR::Load(m_config.GetNodeConfig().GetTxHashSetPath(), genesisBlock);
-	std::shared_ptr<OutputPMMR> pOutputPMMR = OutputPMMR::Load(m_config.GetNodeConfig().GetTxHashSetPath(), genesisBlock);
-	std::shared_ptr<RangeProofPMMR> pRangeProofPMMR = RangeProofPMMR::Load(m_config.GetNodeConfig().GetTxHashSetPath(), genesisBlock);
+	std::shared_ptr<KernelMMR> pKernelMMR;
+	std::shared_ptr<OutputPMMR> pOutputPMMR;
+	std::shared_ptr<RangeProofPMMR> pRangeProofPMMR;
+
+	std::vector<std::thread> threads;
+	threads.emplace_back(std::thread([this, &pKernelMMR] {
+		pKernelMMR = KernelMMR::Load(Global::GetConfig().GetTxHashSetPath());
+	}));
+	threads.emplace_back(std::thread([this, &pOutputPMMR] {
+		pOutputPMMR = OutputPMMR::Load(Global::GetConfig().GetTxHashSetPath());
+	}));
+	threads.emplace_back(std::thread([this, &pRangeProofPMMR] {
+		pRangeProofPMMR = RangeProofPMMR::Load(Global::GetConfig().GetTxHashSetPath());
+	}));
+
+	for (auto& thread : threads) {
+		if (thread.joinable()) {
+			thread.join();
+		}
+	}
 
 	m_pTxHashSet = std::shared_ptr<TxHashSet>(new TxHashSet(m_config, pKernelMMR, pOutputPMMR, pRangeProofPMMR, pConfirmedTip));
 
@@ -34,8 +52,7 @@ std::shared_ptr<ITxHashSet> TxHashSetManager::LoadFromZip(const Config& config, 
 {
 	FileRemover fileRemover(zipFilePath);
 
-	const fs::path& txHashSetPath = config.GetNodeConfig().GetTxHashSetPath();
-	const FullBlock& genesisBlock = config.GetEnvironment().GetGenesisBlock();
+	const fs::path& txHashSetPath = config.GetTxHashSetPath();
 	const TxHashSetZip zip(config);
 
 	try
@@ -46,7 +63,7 @@ std::shared_ptr<ITxHashSet> TxHashSetManager::LoadFromZip(const Config& config, 
 			FileUtil::RemoveFile(zipFilePath);
 
 			// Rewind Kernel MMR
-			std::shared_ptr<KernelMMR> pKernelMMR = KernelMMR::Load(txHashSetPath, genesisBlock);
+			std::shared_ptr<KernelMMR> pKernelMMR = KernelMMR::Load(txHashSetPath);
 			pKernelMMR->Rewind(pHeader->GetKernelMMRSize());
 			pKernelMMR->Commit();
 
@@ -61,7 +78,7 @@ std::shared_ptr<ITxHashSet> TxHashSetManager::LoadFromZip(const Config& config, 
 			BitmapFile::Create(txHashSetPath / "output" / "pmmr_leafset.bin", outputBitmap);
 
 			// Rewind Output MMR
-			std::shared_ptr<OutputPMMR> pOutputPMMR = OutputPMMR::Load(txHashSetPath, genesisBlock);
+			std::shared_ptr<OutputPMMR> pOutputPMMR = OutputPMMR::Load(txHashSetPath);
 			pOutputPMMR->Rewind(pHeader->GetOutputMMRSize(), {});
 			pOutputPMMR->Commit();
 
@@ -76,7 +93,7 @@ std::shared_ptr<ITxHashSet> TxHashSetManager::LoadFromZip(const Config& config, 
 			BitmapFile::Create(txHashSetPath / "rangeproof" / "pmmr_leafset.bin", rangeproofBitmap);
 
 			// Rewind RangeProof MMR
-			std::shared_ptr<RangeProofPMMR> pRangeProofPMMR = RangeProofPMMR::Load(txHashSetPath, genesisBlock);
+			std::shared_ptr<RangeProofPMMR> pRangeProofPMMR = RangeProofPMMR::Load(txHashSetPath);
 			pRangeProofPMMR->Rewind(pHeader->GetOutputMMRSize(), {});
 			pRangeProofPMMR->Commit();
 
@@ -110,18 +127,16 @@ fs::path TxHashSetManager::SaveSnapshot(std::shared_ptr<IBlockDB> pBlockDB, Bloc
 
 		{
 			// Copy to Snapshots/Hash // TODO: If already exists, just use that.
-			FileUtil::CopyDirectory(m_config.GetNodeConfig().GetTxHashSetPath(), snapshotDir);
+			FileUtil::CopyDirectory(m_config.GetTxHashSetPath(), snapshotDir);
 
 			pFlushedHeader = m_pTxHashSet->GetFlushedBlockHeader();
 		}
 
 		{
-			const FullBlock& genesisBlock = m_config.GetEnvironment().GetGenesisBlock();
-
 			// Load Snapshot TxHashSet
-			auto pKernelMMR = KernelMMR::Load(snapshotDir, genesisBlock);
-			auto pOutputPMMR = OutputPMMR::Load(snapshotDir, genesisBlock);
-			auto pRangeProofPMMR = RangeProofPMMR::Load(snapshotDir, genesisBlock);
+			auto pKernelMMR = KernelMMR::Load(snapshotDir);
+			auto pOutputPMMR = OutputPMMR::Load(snapshotDir);
+			auto pRangeProofPMMR = RangeProofPMMR::Load(snapshotDir);
 			TxHashSet snapshotTxHashSet(m_config, pKernelMMR, pOutputPMMR, pRangeProofPMMR, pFlushedHeader);
 
 			// Rewind Snapshot TxHashSet

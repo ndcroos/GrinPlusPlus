@@ -9,13 +9,13 @@
 #include "ChainResyncer.h"
 #include "CoinView.h"
 
+#include <Consensus.h>
 #include <GrinVersion.h>
 #include <Common/Logger.h>
 #include <Core/Global.h>
 #include <Core/Exceptions/BadDataException.h>
-#include <Config/Config.h>
+#include <Core/Config.h>
 #include <PMMR/TxHashSet.h>
-#include <Consensus/BlockTime.h>
 #include <filesystem.h>
 #include <algorithm>
 
@@ -43,7 +43,7 @@ std::shared_ptr<BlockChain> BlockChain::Create(
 	std::shared_ptr<ITransactionPool> pTransactionPool,
 	std::shared_ptr<Locked<IHeaderMMR>> pHeaderMMR)
 {
-	const FullBlock& genesisBlock = config.GetEnvironment().GetGenesisBlock();
+	const FullBlock& genesisBlock = Global::GetGenesisBlock();
 	auto pGenesisIndex = std::make_shared<BlockIndex>(genesisBlock.GetHash(), 0);
 
 	auto pChainStore = ChainStore::Load(config, pGenesisIndex);
@@ -56,29 +56,15 @@ std::shared_ptr<BlockChain> BlockChain::Create(
 		pTxHashSetManager,
 		genesisBlock
 	);
+	Global::SetCoinView(std::make_shared<CoinView>(*pChainState));
 
-	// Trigger Compaction
-	{
-		auto pBatch = pTxHashSetManager->BatchWrite();
-		auto pTxHashSet = pBatch->GetTxHashSet();
-		if (pTxHashSet != nullptr)
-		{
-			const uint64_t horizon = Consensus::GetHorizonHeight(pChainState->Read()->GetHeight(EChainType::CONFIRMED));
-			if (pTxHashSet->GetFlushedBlockHeader()->GetHeight() < horizon)
-			{
-				pTxHashSetManager->Write()->Close();
-			}
-			else
-			{
-				pTxHashSet->Compact();
-				// TODO: Prune database
-			}
-
-			pBatch->Commit();
-		}
+	// Migrate database
+	const uint8_t db_version = pDatabase->Read()->GetVersion();
+	if (db_version > 3) {
+		LOG_ERROR("Database is from a newer version of Grin++!");
+		std::terminate();
 	}
 
-	const uint8_t db_version = pDatabase->Read()->GetVersion();
 	if (db_version < 2) {
 		LOG_WARNING_F("Updating chain for version {}", GRINPP_VERSION);
 		pDatabase->Write()->ClearOutputPositions();
@@ -100,7 +86,25 @@ std::shared_ptr<BlockChain> BlockChain::Create(
 		pDatabase->Write()->SetVersion(3);
 	}
 
-	Global::SetCoinView(std::make_shared<CoinView>(*pChainState));
+	// Trigger Compaction
+	{
+		auto pBatchDB = pDatabase->BatchWrite();
+		pBatchDB->Compact(pChainStore->Read()->GetConfirmedChain());
+		pBatchDB->Commit();
+
+		auto pBatchTxHashSet = pTxHashSetManager->BatchWrite();
+		auto pTxHashSet = pBatchTxHashSet->GetTxHashSet();
+		if (pTxHashSet != nullptr) {
+			const uint64_t horizon = Consensus::GetHorizonHeight(pChainState->Read()->GetHeight(EChainType::CONFIRMED));
+			if (pTxHashSet->GetFlushedBlockHeader()->GetHeight() < horizon) {
+				pTxHashSetManager->Write()->Close();
+			} else {
+				pTxHashSet->Compact();
+			}
+
+			pBatchTxHashSet->Commit();
+		}
+	}
 
 	return std::shared_ptr<BlockChain>(new BlockChain(
 		config,

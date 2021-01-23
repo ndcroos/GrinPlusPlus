@@ -1,6 +1,8 @@
 #include "TorControl.h"
 #include "TorControlClient.h"
 
+#include <Core/Global.h>
+#include <Core/Config.h>
 #include <Net/Tor/TorException.h>
 #include <Net/Tor/TorAddressParser.h>
 #include <Common/Util/StringUtil.h>
@@ -8,23 +10,30 @@
 #include <Crypto/ED25519.h>
 #include <filesystem.h>
 
-TorControl::TorControl(const TorConfig& config, std::unique_ptr<TorControlClient>&& pClient, ChildProcess::UCPtr&& pProcess)
-	: m_torConfig(config), m_pClient(std::move(pClient)), m_pProcess(std::move(pProcess))
+TorControl::TorControl(
+	const uint16_t socksPort,
+	const uint16_t controlPort,
+	const fs::path& torDataPath,
+	std::unique_ptr<TorControlClient>&& pClient,
+	ChildProcess::UCPtr&& pProcess)
+	: m_socksPort(socksPort),
+	m_controlPort(controlPort),
+	m_torDataPath(torDataPath),
+	m_pClient(std::move(pClient)),
+	m_pProcess(std::move(pProcess))
 {
 
 }
 
 TorControl::~TorControl()
 {
-	if (m_pClient != nullptr) {
-		try
-		{
-			m_pClient->Invoke("SIGNAL DUMP\n");
-		} catch (std::exception&) { }
-	}
+	m_pClient.reset();
 }
 
-std::shared_ptr<TorControl> TorControl::Create(const TorConfig& torConfig) noexcept
+std::shared_ptr<TorControl> TorControl::Create(
+	const uint16_t socksPort,
+	const uint16_t controlPort,
+	const fs::path& torDataPath) noexcept
 {
 	try
 	{
@@ -32,26 +41,26 @@ std::shared_ptr<TorControl> TorControl::Create(const TorConfig& torConfig) noexc
 
 #ifdef __linux__
 		std::error_code ec;
-		fs::path torDataPath = torConfig.GetTorDataPath() / ("data" + std::to_string(torConfig.GetControlPort()));
-		fs::remove_all(torDataPath, ec);
-		fs::create_directories(torDataPath, ec);
-		std::string torrcPath = (torConfig.GetTorDataPath() / ".torrc").u8string();
+		fs::path torDataDir = torDataPath / ("data" + std::to_string(controlPort));
+		fs::remove_all(torDataDir, ec);
+		fs::create_directories(torDataDir, ec);
+		std::string torrcPath = (torDataPath / ".torrc").u8string();
 #else
 		std::error_code ec;
-		fs::path torDataPath = "./tor/data" + std::to_string(torConfig.GetControlPort());
-		fs::remove_all(torDataPath, ec);
-		fs::create_directories(torDataPath, ec);
+		fs::path torDataDir = "./tor/data" + std::to_string(controlPort);
+		fs::remove_all(torDataDir, ec);
+		fs::create_directories(torDataDir, ec);
 		fs::remove("./tor/.torrc", ec);
-		fs::copy_file(torConfig.GetTorDataPath() / ".torrc", "./tor/.torrc", ec);
+		fs::copy_file(torDataPath / ".torrc", "./tor/.torrc", ec);
 		std::string torrcPath = "./tor/.torrc";
 #endif
 
 		std::vector<std::string> args({
 			command.u8string(),
-			"--ControlPort", std::to_string(torConfig.GetControlPort()),
-			"--SocksPort", std::to_string(torConfig.GetSocksPort()),
-			"--DataDirectory", torDataPath.u8string(),
-			"--HashedControlPassword", torConfig.GetHashedControlPassword(),
+			"--ControlPort", std::to_string(controlPort),
+			"--SocksPort", std::to_string(socksPort),
+			"--DataDirectory", torDataDir.u8string(),
+			"--HashedControlPassword", Global::GetConfig().GetHashedControlPassword(),
 			"-f", torrcPath,
 			"--ignore-missing-torrc"
 		});
@@ -63,9 +72,15 @@ std::shared_ptr<TorControl> TorControl::Create(const TorConfig& torConfig) noexc
 			pProcess = ChildProcess::Create(args);
 		}
 
-		auto pClient = TorControlClient::Connect(torConfig.GetControlPort(), torConfig.GetControlPassword());
+		auto pClient = TorControlClient::Connect(controlPort, Global::GetConfig().GetControlPassword());
 		if (pClient != nullptr) {
-			return std::make_unique<TorControl>(torConfig, std::move(pClient), std::move(pProcess));
+			return std::make_unique<TorControl>(
+				socksPort,
+				controlPort,
+				torDataPath,
+				std::move(pClient),
+				std::move(pProcess)
+			);
 		}
 	}
 	catch (std::exception& e)
@@ -125,14 +140,8 @@ bool TorControl::DelOnion(const TorAddress& torAddress)
 
 bool TorControl::CheckHeartbeat()
 {
-	// 250-status/bootstrap-phase=NOTICE BOOTSTRAP PROGRESS=100 TAG=done SUMMARY="Done"
-
-	// GETINFO status/clients-seen
-	// GETINFO current-time/local
-
 	try
 	{
-		m_pClient->Invoke("SIGNAL DUMP\n");
 		m_pClient->Invoke("SIGNAL HEARTBEAT\n");
 	}
 	catch (std::exception&)
@@ -140,8 +149,6 @@ bool TorControl::CheckHeartbeat()
 		return false;
 	}
 
-	// SIGNAL HEARTBEAT
-	//std::string command = "GETINFO onions/detached\n";
 	return true;
 }
 

@@ -3,13 +3,14 @@
 #include <string>
 #include <cstdint>
 
-#include <Consensus/BlockWeight.h>
+#include <Consensus.h>
 #include <GrinVersion.h>
+#include <Core/Enums/ProtocolVersion.h>
 
 namespace P2P
 {
 	// Current latest version of the protocol
-	static const uint32_t PROTOCOL_VERSION = 2;
+	static const uint32_t PROTOCOL_VERSION = (uint32_t)ProtocolVersion::Local();
 
 	// Grin's user agent with current version
 	static const std::string USER_AGENT = "Grin++ " + GRINPP_VERSION;
@@ -18,7 +19,7 @@ namespace P2P
 	static const uint64_t HEADER_LENGTH = 11;
 
 	// Max theoretical size of a block filled with outputs.
-	static const uint64_t MAX_BLOCK_SIZE = ((Consensus::MAX_BLOCK_WEIGHT / Consensus::BLOCK_OUTPUT_WEIGHT) * 708);
+	static const uint64_t MAX_BLOCK_SIZE = ((Consensus::MAX_BLOCK_WEIGHT / Consensus::OUTPUT_WEIGHT) * 708);
 
 	// Maximum number of block headers a peer should ever send
 	static const uint32_t MAX_BLOCK_HEADERS = 512;

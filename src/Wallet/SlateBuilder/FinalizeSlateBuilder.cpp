@@ -6,6 +6,7 @@
 #include <Core/Exceptions/WalletException.h>
 #include <Core/Validation/KernelSignatureValidator.h>
 #include <Core/Validation/TransactionValidator.h>
+#include <Wallet/Models/Slatepack/Armor.h>
 #include <Wallet/NodeClient.h>
 #include <Wallet/Wallet.h>
 
@@ -86,7 +87,11 @@ std::pair<Slate, Transaction> FinalizeSlateBuilder::Finalize(const Slate& rcvSla
 	walletTx.SetTransaction(*pTransaction);
 
 	// Update database with latest WalletTx
-	UpdateDatabase(walletTx, finalizeSlate);
+	UpdateDatabase(
+		walletTx,
+		finalizeSlate,
+		Armor::Pack(m_pWallet->GetSlatepackAddress(), finalizeSlate)
+	);
 
 	return std::pair{ finalizeSlate, *pTransaction };
 }
@@ -200,7 +205,7 @@ std::unique_ptr<Transaction> FinalizeSlateBuilder::BuildTransaction(
 		return nullptr;
 	}
 
-	WALLET_INFO_F("Final transaction: {}", transaction.ToJSON().toStyledString());
+	WALLET_INFO_F("Final transaction: {}", transaction);
 
 	return std::make_unique<Transaction>(std::move(transaction));
 }
@@ -244,10 +249,11 @@ bool FinalizeSlateBuilder::VerifyPaymentProofs(
 
 void FinalizeSlateBuilder::UpdateDatabase(
 	const WalletTx& walletTx,
-	const Slate& finalizeSlate) const
+	const Slate& finalizeSlate,
+	const std::string& armored_slatepack) const
 {
 	auto pBatch = m_pWallet->GetDatabase().BatchWrite();
-	pBatch->SaveSlate(m_pWallet->GetMasterSeed(), finalizeSlate);
+	pBatch->SaveSlate(m_pWallet->GetMasterSeed(), finalizeSlate, armored_slatepack);
 	pBatch->AddTransaction(m_pWallet->GetMasterSeed(), walletTx);
 	pBatch->Commit();
 }

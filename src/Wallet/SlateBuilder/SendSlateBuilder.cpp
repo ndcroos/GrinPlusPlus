@@ -4,13 +4,14 @@
 #include "CoinSelection.h"
 #include "SlateUtil.h"
 
+#include <Consensus.h>
 #include <Core/Exceptions/WalletException.h>
 #include <Core/Util/FeeUtil.h>
 #include <Common/Util/FunctionalUtil.h>
 #include <Common/Logger.h>
-#include <Consensus/HardForks.h>
 #include <Net/Tor/TorAddressParser.h>
 #include <Crypto/ED25519.h>
+#include <Wallet/Models/Slatepack/Armor.h>
 
 SendSlateBuilder::SendSlateBuilder(const Config& config, INodeClientConstPtr pNodeClient)
 	: m_config(config), m_pNodeClient(pNodeClient)
@@ -27,7 +28,8 @@ Slate SendSlateBuilder::BuildSendSlate(
 	const bool sendEntireBalance,
 	const std::optional<std::string>& addressOpt,
 	const SelectionStrategyDTO& strategy,
-	const uint16_t slateVersion) const
+	const uint16_t slateVersion,
+	const std::vector<SlatepackAddress>& recipients) const
 {
 	const uint8_t numChangeOutputs = sendEntireBalance ? 0 : maxChangeOutputs;
 	const uint8_t totalNumOutputs = 1 + numChangeOutputs;
@@ -79,7 +81,8 @@ Slate SendSlateBuilder::BuildSendSlate(
 		sendEntireBalance ? 0 : numChangeOutputs,
 		inputs,
 		addressOpt,
-		slateVersion
+		slateVersion,
+		recipients
 	);
 }
 
@@ -91,7 +94,8 @@ Slate SendSlateBuilder::Build(
 	const uint8_t numChangeOutputs,
 	std::vector<OutputDataEntity>& inputs,
 	const std::optional<std::string>& addressOpt,
-	const uint16_t slateVersion) const
+	const uint16_t slateVersion,
+	const std::vector<SlatepackAddress>& recipients) const
 {
 	const uint64_t blockHeight = m_pNodeClient->GetChainHeight() + 1;
 
@@ -142,7 +146,7 @@ Slate SendSlateBuilder::Build(
 
 	Slate slate;
 	slate.version = slateVersion;
-	slate.blockVersion = Consensus::GetHeaderVersion(m_config.GetEnvironment().GetType(), blockHeight);
+	slate.blockVersion = Consensus::GetHeaderVersion(blockHeight);
 	slate.amount = amountToSend;
 	slate.fee = Fee::From(fee);
 	slate.proofOpt = proofOpt;
@@ -185,7 +189,8 @@ Slate SendSlateBuilder::Build(
 		SlateContextEntity{ signing_keys.secret_key, signing_keys.secret_nonce, inputs, changeOutputs },
 		changeOutputs,
 		inputs,
-		walletTx
+		walletTx,
+		Armor::Pack(pWallet->GetSlatepackAddress(), slate, recipients)
 	);
 
 	pBatch->Commit();
@@ -218,7 +223,7 @@ WalletTx SendSlateBuilder::BuildWalletTx(
 	std::transform(
 		inputs.cbegin(), inputs.cend(),
 		std::back_inserter(txInputs),
-		[](const OutputDataEntity& input) { return TransactionInput{ input.GetCommitment() }; }
+		[](const OutputDataEntity& input) { return TransactionInput{ input.GetFeatures(), input.GetCommitment() }; }
 	);
 
 	std::vector<TransactionOutput> txOutputs;
@@ -255,10 +260,11 @@ void SendSlateBuilder::UpdateDatabase(
 	const SlateContextEntity& context,
 	const std::vector<OutputDataEntity>& changeOutputs,
 	std::vector<OutputDataEntity>& coinsToLock,
-	const WalletTx& walletTx) const
+	const WalletTx& walletTx,
+	const std::string& armored_slatepack) const
 {
 	pBatch->SaveSlateContext(masterSeed, slate.GetId(), context);
-	pBatch->SaveSlate(masterSeed, slate);
+	pBatch->SaveSlate(masterSeed, slate, armored_slatepack);
 	pBatch->AddOutputs(masterSeed, changeOutputs);
 
 	// Lock coins

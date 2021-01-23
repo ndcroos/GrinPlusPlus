@@ -1,10 +1,10 @@
 #include <Core/Models/TransactionKernel.h>
 
+#include <Consensus.h>
 #include <Core/Serialization/Serializer.h>
 #include <Core/Util/JsonUtil.h>
 #include <Crypto/Crypto.h>
 #include <Crypto/Hasher.h>
-#include <Consensus/BlockTime.h>
 
 TransactionKernel::TransactionKernel(const EKernelFeatures features, const Fee& fee, const uint64_t lockHeight, Commitment&& excessCommitment, Signature&& excessSignature)
 	: m_features(features), m_fee(fee), m_lockHeight(lockHeight), m_excessCommitment(std::move(excessCommitment)), m_excessSignature(std::move(excessSignature))
@@ -24,7 +24,7 @@ TransactionKernel::TransactionKernel(const EKernelFeatures features, const Fee& 
 
 void TransactionKernel::Serialize(Serializer& serializer) const
 {
-	if (serializer.GetProtocolVersion() == EProtocolVersion::V2)
+	if (serializer.GetProtocolVersion() >= EProtocolVersion::V2)
 	{
 		serializer.Append<uint8_t>((uint8_t)GetFeatures());
 		switch (GetFeatures())
@@ -64,7 +64,7 @@ TransactionKernel TransactionKernel::Deserialize(ByteBuffer& byteBuffer)
 
 	Fee fee;
 	uint64_t lockHeight = 0;
-	if (byteBuffer.GetProtocolVersion() == EProtocolVersion::V2)
+	if (byteBuffer.GetProtocolVersion() >= EProtocolVersion::V2)
 	{
 		if (features != EKernelFeatures::COINBASE_KERNEL)
 		{

@@ -32,10 +32,8 @@ TxHashSet::TxHashSet(
 bool TxHashSet::IsValid(std::shared_ptr<const IBlockDB> pBlockDB, const Transaction& transaction) const
 {
 	// Validate inputs
-	const uint64_t maximumBlockHeight = Consensus::GetMaxCoinbaseHeight(
-		m_config.GetEnvironment().GetType(),
-		m_pBlockHeader->GetHeight() + 1 // Add one since this is used by TransactionPool
-	);
+	const uint64_t next_height = m_pBlockHeader->GetHeight() + 1;
+	const uint64_t maximumBlockHeight = Consensus::GetMaxCoinbaseHeight(next_height);
 	for (const TransactionInput& input : transaction.GetInputs())
 	{
 		const Commitment& commitment = input.GetCommitment();
@@ -98,10 +96,7 @@ std::unique_ptr<BlockSums> TxHashSet::ValidateTxHashSet(const BlockHeader& heade
 bool TxHashSet::ApplyBlock(std::shared_ptr<IBlockDB> pBlockDB, const FullBlock& block)
 {
 	// Validate inputs
-	const uint64_t maximumBlockHeight = Consensus::GetMaxCoinbaseHeight(
-		m_config.GetEnvironment().GetType(),
-		block.GetHeight()
-	);
+	const uint64_t maximumBlockHeight = Consensus::GetMaxCoinbaseHeight(block.GetHeight());
 
 	Roaring blockInputBitmap;
 
@@ -158,6 +153,8 @@ bool TxHashSet::ApplyBlock(std::shared_ptr<IBlockDB> pBlockDB, const FullBlock& 
 
 		pBlockDB->AddOutputPosition(output.GetCommitment(), OutputLocation(mmrIndex, blockHeight));
 	}
+
+	pBlockDB->RemoveOutputPositions(block.GetInputCommitments());
 
 	// Append new kernels
 	for (const TransactionKernel& kernel : block.GetKernels())
@@ -232,11 +229,11 @@ TxHashSetRoots TxHashSet::GetRoots(const std::shared_ptr<const IBlockDB>& pBlock
 		m_pRangeProofPMMR->Append(output.GetRangeProof());
 	}
 
-	const uint64_t numKernels = (MMRUtil::GetLeafIndex(m_pBlockHeader->GetKernelMMRSize())) + body.GetKernels().size();
+	const uint64_t numKernels = MMRUtil::GetLeafIndex(m_pBlockHeader->GetKernelMMRSize()) + body.GetKernels().size();
 	const uint64_t kernelSize = MMRUtil::GetPMMRIndex(numKernels);
 	const auto kernelRoot = m_pKernelMMR->Root(kernelSize);
 
-	const uint64_t numOutputs = (MMRUtil::GetLeafIndex(m_pBlockHeader->GetOutputMMRSize())) + body.GetOutputs().size();
+	const uint64_t numOutputs = MMRUtil::GetLeafIndex(m_pBlockHeader->GetOutputMMRSize()) + body.GetOutputs().size();
 	const uint64_t outputSize = MMRUtil::GetPMMRIndex(numOutputs);
 	const auto outputRoot = m_pOutputPMMR->Root(outputSize);
 	const auto rangeProofRoot = m_pRangeProofPMMR->Root(outputSize);

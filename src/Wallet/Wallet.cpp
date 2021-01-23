@@ -1,8 +1,9 @@
 #include <Wallet/Wallet.h>
+#include <Consensus.h>
 #include <Wallet/Keychain/KeyChain.h>
 #include <Wallet/Models/Slatepack/Armor.h>
+#include <Wallet/Exceptions/InsufficientFundsException.h>
 #include <Core/Exceptions/WalletException.h>
-#include <Consensus/Common.h>
 #include <Core/Util/FeeUtil.h>
 #include <Crypto/Hasher.h>
 #include <Crypto/Curve25519.h>
@@ -23,7 +24,7 @@ WalletSummaryDTO Wallet::GetWalletSummary() const
 	
 	std::vector<WalletTx> transactions = m_walletDB.Read()->GetTransactions(m_master_seed);
 	return WalletSummaryDTO(
-		m_pConfig->GetWalletConfig().GetMinimumConfirmations(),
+		m_pConfig->GetMinimumConfirmations(),
 		balance,
 		std::move(transactions)
 	);
@@ -134,20 +135,13 @@ SlateContextEntity Wallet::GetSlateContext(const uuids::uuid& slateId) const
 	return *pSlateContext;
 }
 
-// void Wallet::CheckForOutputs(const bool fromGenesis)
-// {
-
-// }
-
 std::optional<TorAddress> Wallet::AddTorListener(const KeyChainPath& path, const TorProcess::Ptr& pTorProcess)
 {
 	KeyChain keyChain = KeyChain::FromSeed(*m_pConfig, m_master_seed);
 	ed25519_keypair_t torKey = keyChain.DeriveED25519Key(path);
 
-	std::shared_ptr<TorAddress> pTorAddress = pTorProcess->AddListener(torKey.secret_key, GetListenerPort());
-	if (pTorAddress != nullptr) {
-		SetTorAddress(*pTorAddress);
-	}
+	TorAddress tor_address = pTorProcess->AddListener(torKey.secret_key, GetListenerPort());
+	SetTorAddress(tor_address);
 
 	return GetTorAddress();
 }
@@ -165,15 +159,19 @@ FeeEstimateDTO Wallet::EstimateFee(const EstimateFeeCriteria& criteria) const
         [](const OutputDataEntity& output_data) { return output_data.GetStatus() == EOutputStatus::SPENDABLE; }
     );
 
-	std::vector<OutputDataEntity> inputs = CoinSelection().SelectCoinsToSpend(
-		available_coins,
-		criteria.GetAmount(),
-		criteria.GetFeeBase(),
-		criteria.GetSelectionStrategy().GetStrategy(),
-		criteria.GetSelectionStrategy().GetInputs(),
-		totalNumOutputs,
-		numKernels
-	);
+	std::vector<OutputDataEntity> inputs = available_coins;
+	
+	if (!criteria.SendEntireBalance()) {
+		inputs = CoinSelection().SelectCoinsToSpend(
+			available_coins,
+			criteria.GetAmount(),
+			criteria.GetFeeBase(),
+			criteria.GetSelectionStrategy().GetStrategy(),
+			criteria.GetSelectionStrategy().GetInputs(),
+			totalNumOutputs,
+			numKernels
+		);
+	}
 
 	// Calculate the fee
 	const uint64_t fee = FeeUtil::CalculateFee(
@@ -190,7 +188,21 @@ FeeEstimateDTO Wallet::EstimateFee(const EstimateFeeCriteria& criteria) const
         [](const OutputDataEntity& input) { return WalletOutputDTO::FromOutputData(input); }
     );
 
-	return FeeEstimateDTO(fee, std::move(inputDTOs));
+	uint64_t amount = criteria.GetAmount();
+	if (criteria.SendEntireBalance()) {
+		const uint64_t total_amount = std::accumulate(
+			available_coins.cbegin(), available_coins.cend(), (uint64_t)0,
+			[](const uint64_t total, const OutputDataEntity& coin) { return total + coin.GetAmount(); }
+		);
+
+		if (total_amount < fee) {
+			throw InsufficientFundsException();
+		}
+
+		amount = total_amount - fee;
+	}
+
+	return FeeEstimateDTO(amount, fee, std::move(inputDTOs));
 }
 
 // //
@@ -234,7 +246,7 @@ BuildCoinbaseResponse Wallet::BuildCoinbase(const BuildCoinbaseCriteria& criteri
 	auto pDatabase = m_walletDB.BatchWrite();
 
 	const uint64_t amount = Consensus::REWARD + criteria.GetFees();
-	const KeyChainPath keyChainPath = criteria.GetPath().value_or(
+	KeyChainPath keyChainPath = criteria.GetPath().value_or(
 		pDatabase->GetNextChildPath(m_userPath)
 	);
 	SecretKey blindingFactor = keyChain.DerivePrivateKey(keyChainPath, amount);

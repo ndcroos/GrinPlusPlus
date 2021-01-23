@@ -1,9 +1,7 @@
 #include "BlockHeaderValidator.h"
 
+#include <Consensus.h>
 #include <Common/Util/HexUtil.h>
-#include <Consensus/BlockDifficulty.h>
-#include <Consensus/BlockTime.h>
-#include <Consensus/HardForks.h>
 #include <Common/Logger.h>
 #include <PoW/PoWManager.h>
 #include <PMMR/HeaderMMR.h>
@@ -35,7 +33,7 @@ bool BlockHeaderValidator::IsValidHeader(const BlockHeader& header, const BlockH
 	}
 
 	// Validate Version
-	const uint64_t validHeaderVersion = Consensus::GetHeaderVersion(m_config.GetEnvironment().GetType(), header.GetHeight());
+	const uint64_t validHeaderVersion = Consensus::GetHeaderVersion(header.GetHeight());
 	if (header.GetVersion() != validHeaderVersion)
 	{
 		LOG_WARNING_F("Invalid version for header {}", header);

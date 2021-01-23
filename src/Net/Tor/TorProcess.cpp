@@ -4,6 +4,7 @@
 #include <Net/Tor/TorConnection.h>
 #include <Common/Util/ThreadUtil.h>
 #include <Common/Logger.h>
+#include <Crypto/ED25519.h>
 #include <Core/Global.h>
 #include <cstdlib>
 #include <memory>
@@ -12,6 +13,7 @@
 
 TorProcess::~TorProcess()
 {
+	m_shutdown = true;
 	LOG_INFO("Terminating tor process");
 	ThreadUtil::Join(m_initThread);
 }
@@ -26,7 +28,7 @@ TorProcess::Ptr TorProcess::Initialize(const fs::path& torDataPath, const uint16
 
 void TorProcess::Thread_Initialize(TorProcess* pProcess)
 {
-	while (Global::IsRunning())
+	while (Global::IsRunning() && !pProcess->m_shutdown)
 	{
 		try
 		{
@@ -36,6 +38,19 @@ void TorProcess::Thread_Initialize(TorProcess* pProcess)
 					LOG_WARNING("Tor heartbeat failed. Killing process and reinitializing.");
 					pProcess->m_pControl.reset();
 					continue;
+				}
+
+				const size_t size = pProcess->m_servicesToAdd.size();
+				std::vector<std::pair<ed25519_secret_key_t, uint16_t>> services_to_add =
+					pProcess->m_servicesToAdd.copy_front(size);
+				pProcess->m_servicesToAdd.pop_front(size);
+
+				for (const auto& service : services_to_add) {
+					auto pAdded = pProcess->AddListener(lock, service.first, service.second);
+					if (pAdded == nullptr) {
+						// Failed - Add it to back to retry.
+						pProcess->m_servicesToAdd.push_back(service);
+					}
 				}
 
 				lock.unlock();
@@ -54,20 +69,24 @@ void TorProcess::Thread_Initialize(TorProcess* pProcess)
 			}
 
 			LOG_INFO("Initializing Tor");
-			TorConfig config{ pProcess->m_socksPort, pProcess->m_controlPort, pProcess->m_torDataPath };
-			pProcess->m_pControl = TorControl::Create(config);
+			pProcess->m_pControl = TorControl::Create(
+				pProcess->m_socksPort,
+				pProcess->m_controlPort,
+				pProcess->m_torDataPath
+			);
 			LOG_INFO_F("Tor Initialized: {}", pProcess->m_pControl != nullptr);
 
 			auto addresses_to_add = pProcess->m_activeServices;
-			lock.unlock();
+
 			if (pProcess->m_pControl != nullptr) {
 				for (auto iter = addresses_to_add.cbegin(); iter != addresses_to_add.cend(); iter++)
 				{
-					auto pTorAddress = pProcess->AddListener(iter->second.first, iter->second.second);
+					auto pTorAddress = pProcess->AddListener(lock, iter->second.first, iter->second.second);
 					if (pTorAddress != nullptr) {
 						LOG_INFO_F("Re-added onion address {}", iter->first);
 					} else {
 						LOG_INFO_F("Failed to re-add onion address {}", iter->first);
+						pProcess->m_servicesToAdd.push_back(iter->second);
 					}
 				}
 			}
@@ -96,19 +115,23 @@ bool TorProcess::RetryInit()
 	std::unique_lock<std::mutex> lock(m_mutex);
 
 	if (m_pControl == nullptr) {
-		m_pControl = TorControl::Create(TorConfig{ m_socksPort, m_controlPort, m_torDataPath });
+		m_pControl = TorControl::Create(m_socksPort, m_controlPort, m_torDataPath);
 		return m_pControl != nullptr;
 	}
 
 	return false;
 }
 
-std::shared_ptr<TorAddress> TorProcess::AddListener(const ed25519_secret_key_t& secretKey, const uint16_t portNumber)
+TorAddress TorProcess::AddListener(const ed25519_secret_key_t& secretKey, const uint16_t portNumber)
 {
-	std::unique_lock<std::mutex> lock(m_mutex);
+	m_servicesToAdd.push_back(std::make_pair(secretKey, portNumber));
 
-	try
-	{
+	return TorAddressParser::FromPubKey(ED25519::CalculatePubKey(secretKey));
+}
+
+std::unique_ptr<TorAddress> TorProcess::AddListener(const std::unique_lock<std::mutex>&, const ed25519_secret_key_t& secretKey, const uint16_t portNumber)
+{
+	try {
 		if (m_pControl != nullptr) {
 			const std::string address = m_pControl->AddOnion(secretKey, 80, portNumber);
 			if (!address.empty()) {
@@ -117,13 +140,12 @@ std::shared_ptr<TorAddress> TorProcess::AddListener(const ed25519_secret_key_t& 
 					LOG_ERROR_F("Failed to parse listener address: {}", address);
 				} else {
 					m_activeServices.insert({ address, { secretKey, portNumber } });
-					return std::make_shared<TorAddress>(torAddress.value());
+					return std::make_unique<TorAddress>(torAddress.value());
 				}
 			}
 		}
 	}
-	catch (const TorException& e)
-	{
+	catch (const TorException& e) {
 		LOG_ERROR_F("Failed to add listener: {}", e.what());
 	}
 

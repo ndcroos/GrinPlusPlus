@@ -142,12 +142,9 @@ std::optional<TorAddress> WalletManager::AddTorListener(const SessionToken& toke
 	KeyChain keyChain = KeyChain::FromSeed(m_config, m_sessionManager.Read()->GetSeed(token));
 	ed25519_keypair_t torKey = keyChain.DeriveED25519Key(path);
 
-	std::shared_ptr<TorAddress> pTorAddress = pTorProcess->AddListener(torKey.secret_key, wallet.Read()->GetListenerPort());
-	if (pTorAddress != nullptr)
-	{
-		wallet.Write()->SetTorAddress(*pTorAddress);
-		walletImpl.Write()->SetTorAddress(*pTorAddress);
-	}
+	TorAddress tor_address = pTorProcess->AddListener(torKey.secret_key, wallet.Read()->GetListenerPort());
+	wallet.Write()->SetTorAddress(tor_address);
+	walletImpl.Write()->SetTorAddress(tor_address);
 
 	return wallet.Read()->GetTorAddress();
 }
@@ -231,6 +228,16 @@ Slate WalletManager::Send(const SendCriteria& sendCriteria)
 	const SecureVector masterSeed = m_sessionManager.Read()->GetSeed(sendCriteria.GetToken());
 	Locked<WalletImpl> wallet = m_sessionManager.Read()->GetWalletImpl(sendCriteria.GetToken());
 
+	std::vector<SlatepackAddress> recipients;
+
+	if (sendCriteria.GetAddress().has_value()) {
+		try {
+			SlatepackAddress slatepack_address = SlatepackAddress::Parse(sendCriteria.GetAddress().value());
+			recipients.emplace_back(std::move(slatepack_address));
+		}
+		catch (std::exception&) {}
+	}
+
 	return SendSlateBuilder(m_config, m_pNodeClient).BuildSendSlate(
 		wallet,
 		masterSeed,
@@ -240,7 +247,8 @@ Slate WalletManager::Send(const SendCriteria& sendCriteria)
 		!sendCriteria.GetAmount().has_value(), // TODO: Implement
 		sendCriteria.GetAddress(),
 		sendCriteria.GetSelectionStrategy(),
-		sendCriteria.GetSlateVersion()
+		sendCriteria.GetSlateVersion(),
+		recipients
 	);
 }
 
@@ -249,11 +257,17 @@ Slate WalletManager::Receive(const ReceiveCriteria& receiveCriteria)
 	const SecureVector masterSeed = m_sessionManager.Read()->GetSeed(receiveCriteria.GetToken());
 	Locked<WalletImpl> wallet = m_sessionManager.Read()->GetWalletImpl(receiveCriteria.GetToken());
 
+	std::vector<SlatepackAddress> recipients;
+	if (receiveCriteria.GetSlatepack().has_value()) {
+		recipients.push_back(receiveCriteria.GetSlatepack().value().m_sender);
+	}
+
 	return ReceiveSlateBuilder(m_config).AddReceiverData(
 		wallet,
 		masterSeed,
 		receiveCriteria.GetSlate(),
-		receiveCriteria.GetAddress()
+		receiveCriteria.GetAddress(),
+		recipients
 	);
 }
 
