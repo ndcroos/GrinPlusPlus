@@ -18,6 +18,7 @@ file(GLOB SOURCE_CODE
 	"ForeignController.cpp"
 )
 
+add_subdirectory(HardwareWallet)
 add_subdirectory(WalletDB)
 add_subdirectory(Keychain)
 
