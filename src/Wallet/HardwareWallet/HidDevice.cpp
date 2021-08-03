@@ -1,3 +1,5 @@
+#pragma once
+
 #include "Error.h"
 #include "HidDevice.h"
 #include "Utils.h"

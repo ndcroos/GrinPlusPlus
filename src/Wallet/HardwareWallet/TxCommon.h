@@ -1,19 +1,26 @@
 #pragma once
 
+#include <Wallet/WalletDB/Models/OutputDataEntity.h>
+#include <Crypto/Models/Signature.h>
+#include <Core/Models/Fee.h>
+
 namespace ledger {
-	struct TxCommon {
 
-		std::vector<OutputDataEntity> inputs;
-		std::vector<OutputDataEntity> outputs;
-		//offset;	
-		//kernelParameters;
+    // 
+    struct TxCommon {
 
-	}
+        std::vector<OutputDataEntity> inputs;
+	std::vector<OutputDataEntity> outputs;
+	//offset;	
+	ledger::KernelParameters kernelParameters;
 
-	struct KernelParameters {
-		fee;
-		height;
-		signature;
-	}
+    };
+
+    // 
+    struct KernelParameters {
+        Fee fee; // 
+	uint64_t height; // 
+	Signature signature; // 
+    };
 
 }

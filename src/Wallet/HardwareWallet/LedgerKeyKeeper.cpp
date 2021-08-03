@@ -1,10 +1,13 @@
 #include "Ledger.h"
 #include "LedgerKeyKeeper.h"
+#include <iostream>
 
 namespace ledger {
 
 	LedgerKeyKeeper::LedgerKeyKeeper(){
+
             this->device = new ledger::Ledger();
+
         }
 	
 	LedgerKeyKeeper::~LedgerKeyKeeper(){
@@ -13,35 +16,32 @@ namespace ledger {
 	
 	int LedgerKeyKeeper::GetNumSlots(){
             // Get device
-            auto error = dev->open();
+            auto error = this->device->open();
             if(error != ledger::Error::SUCCESS){
                 std::cout<< "Error: " + error_message(error) + "\n";
             }
         }
 	
-	void LedgerKeyKeeper::SignSender(
-		std::vector<OutputDataEntity> inputs,
-		    
-        )
+	void LedgerKeyKeeper::SignSender(std::vector<OutputDataEntity> input)
 	{
-            // Get device
-            auto error = dev->SignSender();
+            TxCommon txCommon;
+            auto error = this->device->SignSender(txCommon);
             if(error != ledger::Error::SUCCESS){
                 std::cout<< "Error: " + error_message(error) + "\n";
             }
         }
 	
 	void LedgerKeyKeeper::SignReceiver(){
-            // Get device
-            auto error = dev->SignReceiver();
+            TxCommon txCommon;
+            auto error = this->device->SignReceiver(txCommon);
             if(error != ledger::Error::SUCCESS){
                 std::cout<< "Error: " + error_message(error) + "\n";
             }
         }
 	
 	void LedgerKeyKeeper::SignFinalize(){
-            // Get device
-            auto error = dev->SignFinalize();
+            TxCommon txCommon;
+            auto error = this->device->SignFinalize(txCommon);
             if(error != ledger::Error::SUCCESS){
                 std::cout<< "Error: " + error_message(error) + "\n";
             }
