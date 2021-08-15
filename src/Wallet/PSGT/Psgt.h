@@ -53,9 +53,9 @@ public:
 	Psgt();
 	~Psgt();
 
-	Serialize();
-	SerializeMap();
-	Parse();
+	void Serialize();
+	void SerializeMap();
+	void Parse();
 
 private:
 
@@ -214,19 +214,142 @@ struct PartiallySignedTransaction
     std::vector<PSGTInput> inputs;
     std::vector<PSGTOutput> outputs;
     PSGTPaymentProof paymentproof;
+    std::map<std::vector<unsigned char>, std::vector<unsigned char>> unknown;
 
     bool IsNull() const;
-    bool AddInput(PSGTInput& psbtin);
-    bool AddOutput(const PSGTOutput& psbtout);
+
+    bool AddInput(PSGTInput& psgtin);
+    bool AddOutput(const PSGTOutput& psgtout);
+    bool AddPaymentProof(PSGTPaymentProof paymentProof);
     PartiallySignedTransaction() {}
 
     inline void Serialize(Stream& s) const {
 
+        // magic bytes
+        s << PSGT_MAGIC_BYTES;
+
+        // Write the unknown things
+        for (auto& entry : unknown) {
+            s << entry.first;
+            s << entry.second;
+        }
+
+        // Separator
+        s << PSGT_SEPARATOR;
+
+        // Write inputs
+        for (const PSGTInput& input : inputs) {
+            s << input;
+        }
+        // Write outputs
+        for (const PSGTOutput& output : outputs) {
+            s << output;
+        }
     }
 
     template <typename Stream>
     inline void Unserialize(Stream& s) 
+        // Read the magic bytes
+        uint8_t magic[5];
+        s >> magic;
+        if (!std::equal(magic, magic + 5, PSGT_MAGIC_BYTES)) {
+            throw std::ios_base::failure("Invalid PSGT magic bytes");
+        }
 
+        // Used for duplicate key detection
+        std::set<std::vector<unsigned char>> key_lookup;
+
+        // Read global data
+        bool found_sep = false;
+        while(!s.empty()) {
+            // Read
+            std::vector<unsigned char> key;
+            s >> key;
+
+            // the key is empty if that was actually a separator byte
+            // This is a special case for key lengths 0 as those are not allowed (except for separator)
+            if (key.empty()) {
+                found_sep = true;
+                break;
+            }
+
+            // First byte of key is the type
+            unsigned char type = key[0];
+
+            // Do stuff based on type
+            switch(type) {
+                case PSBT_GLOBAL_UNSIGNED_TX:
+                {
+                    if (!key_lookup.emplace(key).second) {
+                        throw std::ios_base::failure("Duplicate Key, unsigned tx already provided");
+                    } else if (key.size() != 1) {
+                        throw std::ios_base::failure("Global unsigned tx key is more than one byte type");
+                    }
+                    CMutableTransaction mtx;
+                    // Set the stream to serialize with non-witness since this should always be non-witness
+                    OverrideStream<Stream> os(&s, s.GetType(), s.GetVersion() | SERIALIZE_TRANSACTION_NO_WITNESS);
+                    UnserializeFromVector(os, mtx);
+                    tx = std::move(mtx);
+                    // Make sure that all scriptSigs and scriptWitnesses are empty
+                    for (const CTxIn& txin : tx->vin) {
+                        if (!txin.scriptSig.empty() || !txin.scriptWitness.IsNull()) {
+                            throw std::ios_base::failure("Unsigned tx does not have empty scriptSigs and scriptWitnesses.");
+                        }
+                    }
+                    break;
+                }
+                // Unknown stuff
+                default: {
+                    if (unknown.count(key) > 0) {
+                        throw std::ios_base::failure("Duplicate Key, key for unknown value already provided");
+                    }
+                    // Read in the value
+                    std::vector<unsigned char> val_bytes;
+                    s >> val_bytes;
+                    unknown.emplace(std::move(key), std::move(val_bytes));
+                }
+            }
+        }
+
+        if (!found_sep) {
+            throw std::ios_base::failure("Separator is missing at the end of the global map");
+        }
+
+        // Make sure that we got an unsigned tx
+        if (!tx) {
+            throw std::ios_base::failure("No unsigned transcation was provided");
+        }
+
+        // Read input data
+        unsigned int i = 0;
+        while (!s.empty() && i < tx->vin.size()) {
+            PSBTInput input;
+            s >> input;
+            inputs.push_back(input);
+
+            // Make sure the non-witness utxo matches the outpoint
+            if (input.non_witness_utxo && input.non_witness_utxo->GetHash() != tx->vin[i].prevout.hash) {
+                throw std::ios_base::failure("Non-witness UTXO does not match outpoint hash");
+            }
+            ++i;
+        }
+        // Make sure that the number of inputs matches the number of inputs in the transaction
+        if (inputs.size() != tx->vin.size()) {
+            throw std::ios_base::failure("Inputs provided does not match the number of inputs in transaction.");
+        }
+
+        // Read output data
+        i = 0;
+        while (!s.empty() && i < tx->vout.size()) {
+            PSBTOutput output;
+            s >> output;
+            outputs.push_back(output);
+            ++i;
+        }
+        // Make sure that the number of outputs matches the number of outputs in the transaction
+        if (outputs.size() != tx->vout.size()) {
+            throw std::ios_base::failure("Outputs provided does not match the number of outputs in transaction.");
+        }
     }
 
     template <typename Stream>
@@ -244,5 +367,12 @@ enum class PSGTRole {
 };
 
 std::string PSGTRoleName(PSGTRole role);
+
+
+//! Decode a base64ed PSGT into a PartiallySignedTransaction
+bool DecodeBase64PSGT(PartiallySignedTransaction& decoded_psgt, const std::string& base64_psgt, std::string& error);
+//! Decode a raw (binary blob) PSGT into a PartiallySignedTransaction
+bool DecodeRawPSBT(PartiallySignedTransaction& decoded_psgt, const std::string& raw_psgt, std::string& error);
+
 
 #endif // _PSGT_H
