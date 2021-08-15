@@ -2,19 +2,22 @@
 
 #include "Transport.h"
 #include "TxCommon.h"
+#include "Error.h"
 
 namespace ledger {
 
     class Ledger {
 
-	enum APDU : uint8_t {
+    public:
+
+        enum APDU : uint8_t {
 		CLA = 0xe0,
 		INS_GET_APP_CONFIGURATION = 0x01,
 		INS_GET_PUBLIC_KEY = 0x02,
-		INS_SIGN = 0x03,
+		INS_SIGN_SENDER = 0x03,
+		INS_SIGN_RECEIVER = 0x04,
+		INS_SIGN_FINALIZE = 0x05,
 	};
-
-    public:
 
         Ledger();
         ~Ledger();

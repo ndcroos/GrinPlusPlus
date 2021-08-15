@@ -7,20 +7,21 @@
 namespace ledger {
 
     // 
-    struct TxCommon {
+    typedef struct {
+        Fee fee; // 
+	uint64_t height; // 
+	Signature signature; // 
+    } KernelParameters;
+
+
+    // 
+    typedef struct {
 
         std::vector<OutputDataEntity> inputs;
 	std::vector<OutputDataEntity> outputs;
 	//offset;	
-	ledger::KernelParameters kernelParameters;
+	KernelParameters kernelParameters;
 
-    };
-
-    // 
-    struct KernelParameters {
-        Fee fee; // 
-	uint64_t height; // 
-	Signature signature; // 
-    };
+    } TxCommon;
 
 }

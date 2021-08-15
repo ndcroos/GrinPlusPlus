@@ -3,13 +3,14 @@
 #include "Transport.h"
 
 namespace ledger {
-	Transport::Transport(TransportType type) {
-		switch (type) {
-			case TransportType::HID:
-				comm_ = std::make_unique<HID>();
-				break;
-		}
+
+    Transport::Transport(TransportType type) {
+	switch (type) {
+            case TransportType::HID:
+		comm_ = std::make_unique<HID>();
+		break;
 	}
+    }
 
 	Error Transport::open() {
 		return comm_->open();
@@ -54,4 +55,5 @@ namespace ledger {
 	std::vector<uint8_t> Transport::apdu_header(uint8_t cla, uint8_t ins, uint8_t p1, uint8_t p2, uint8_t lc) {
 		return std::vector<uint8_t>{cla, ins, p1, p2, lc};
 	}
+
 } // namespace ledger

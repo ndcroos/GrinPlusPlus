@@ -9,3 +9,15 @@ Psgt::~Psgt()
 {
 
 }
+
+Psgt::Serialize()
+{
+
+
+}
+
+Psgt::SerializeMap()
+{
+
+
+}

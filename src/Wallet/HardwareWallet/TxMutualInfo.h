@@ -1,6 +1,7 @@
 #pragma once
 
 namespace ledger {
+
 	struct TxMutualInfo {
 
 		std::vector<OutputDataEntity> inputs;
